@@ -1,9 +1,9 @@
 {
   "display_name": "RPG Tracker",
   "name": "rpg-tracker",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "MedExaminer",
-  "description": "A draggable RPG tracker panel for SillyTavern.",
+  "description": "A draggable, editable roleplay tracker for SillyTavern.",
   "js": "index.js",
   "css": "style.css",
   "loading_order": 10,

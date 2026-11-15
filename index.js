@@ -17,10 +17,12 @@ const defaults = {
     ],
     assets: [],
     clothing: [],
+    position: { x: 24, y: 120 },
 };
 
 let state;
-let root;
+let panel;
+let launcher;
 
 function clone(value) {
     return JSON.parse(JSON.stringify(value));
@@ -32,6 +34,9 @@ function loadState() {
     for (const key of ["stats", "assets", "clothing"]) {
         if (!Array.isArray(state[key])) state[key] = clone(defaults[key]);
     }
+    if (!state.position || !Number.isFinite(state.position.x) || !Number.isFinite(state.position.y)) {
+        state.position = clone(defaults.position);
+    }
 }
 
 function persist() {
@@ -39,113 +44,97 @@ function persist() {
     saveSettingsDebounced();
 }
 
-function element(tag, className, text) {
+function makeElement(tag, className, text) {
     const node = document.createElement(tag);
     if (className) node.className = className;
     if (text !== undefined) node.textContent = text;
     return node;
 }
 
-function field(labelText, key, value, type = "text", placeholder = "") {
-    const label = element("label", "rpt-field");
-    label.append(element("span", "rpt-label", labelText));
-    const input = document.createElement("input");
-    input.type = type;
-    input.dataset.field = key;
-    input.value = value ?? "";
-    input.placeholder = placeholder;
-    label.append(input);
-    return label;
-}
+function renderCollection(collection) {
+    const list = panel.querySelector(`#rpt-${collection}-list`);
+    list.replaceChildren();
 
-function makeRow(collection, item, index) {
-    const row = element("div", "rpt-item");
-    const name = document.createElement("input");
-    name.type = "text";
-    name.value = item.name ?? "";
-    name.placeholder = collection === "stats" ? "Stat name" : "Item name";
-    name.dataset.collection = collection;
-    name.dataset.index = index;
-    name.dataset.property = "name";
-    name.setAttribute("aria-label", `${collection} item name`);
-    row.append(name);
+    state[collection].forEach((item, index) => {
+        const row = makeElement("div", `rpt-item${collection === "stats" ? " rpt-stat-item" : ""}`);
+        const name = document.createElement("input");
+        name.type = "text";
+        name.value = item.name ?? "";
+        name.placeholder = collection === "stats" ? "Stat name" : "Item name";
+        name.dataset.collection = collection;
+        name.dataset.index = index;
+        name.dataset.property = "name";
+        name.setAttribute("aria-label", `${collection} item name`);
+        row.append(name);
 
-    if (collection === "stats") {
-        const value = document.createElement("input");
-        value.type = "text";
-        value.value = item.value ?? "";
-        value.placeholder = "Value";
-        value.dataset.collection = collection;
-        value.dataset.index = index;
-        value.dataset.property = "value";
-        value.setAttribute("aria-label", `${item.name || "Stat"} value`);
-        row.append(value);
-    } else {
-        const quantity = document.createElement("input");
-        quantity.type = "text";
-        quantity.value = item.quantity ?? "1";
-        quantity.placeholder = "Qty";
-        quantity.dataset.collection = collection;
-        quantity.dataset.index = index;
-        quantity.dataset.property = "quantity";
-        quantity.setAttribute("aria-label", `${item.name || "Item"} quantity`);
-        row.append(quantity);
+        if (collection === "stats") {
+            const value = document.createElement("input");
+            value.type = "text";
+            value.value = item.value ?? "";
+            value.placeholder = "Value";
+            value.dataset.collection = collection;
+            value.dataset.index = index;
+            value.dataset.property = "value";
+            value.setAttribute("aria-label", `${item.name || "Stat"} value`);
+            row.append(value);
+        } else {
+            const quantity = document.createElement("input");
+            quantity.type = "text";
+            quantity.value = item.quantity ?? "1";
+            quantity.placeholder = "Qty";
+            quantity.dataset.collection = collection;
+            quantity.dataset.index = index;
+            quantity.dataset.property = "quantity";
+            quantity.setAttribute("aria-label", `${item.name || "Item"} quantity`);
+            row.append(quantity);
 
-        const notes = document.createElement("input");
-        notes.type = "text";
-        notes.value = item.notes ?? "";
-        notes.placeholder = collection === "assets" ? "Notes / condition" : "How it's worn / condition";
-        notes.dataset.collection = collection;
-        notes.dataset.index = index;
-        notes.dataset.property = "notes";
-        notes.setAttribute("aria-label", `${item.name || "Item"} notes`);
-        row.append(notes);
-    }
+            const notes = document.createElement("input");
+            notes.type = "text";
+            notes.value = item.notes ?? "";
+            notes.placeholder = collection === "assets" ? "Notes / condition" : "How it's worn / condition";
+            notes.dataset.collection = collection;
+            notes.dataset.index = index;
+            notes.dataset.property = "notes";
+            notes.setAttribute("aria-label", `${item.name || "Item"} notes`);
+            row.append(notes);
+        }
 
-    const remove = element("button", "rpt-remove", "×");
-    remove.type = "button";
-    remove.dataset.remove = collection;
-    remove.dataset.index = index;
-    remove.title = "Remove item";
-    remove.setAttribute("aria-label", "Remove item");
-    row.append(remove);
-    return row;
-}
-
-function renderCollection(collection, containerId) {
-    const container = root.querySelector(`#${containerId}`);
-    container.replaceChildren();
-    state[collection].forEach((item, index) => container.append(makeRow(collection, item, index)));
+        const remove = makeElement("button", "rpt-remove", "×");
+        remove.type = "button";
+        remove.dataset.remove = collection;
+        remove.dataset.index = index;
+        remove.title = "Remove item";
+        remove.setAttribute("aria-label", "Remove item");
+        row.append(remove);
+        list.append(row);
+    });
 }
 
 function render() {
-    root.querySelector('[data-field="character"]').value = state.character;
-    root.querySelector('[data-field="location"]').value = state.location;
-    root.querySelector('[data-field="date"]').value = state.date;
-    root.querySelector('[data-field="time"]').value = state.time;
-    root.querySelector('[data-field="weather"]').value = state.weather;
-    root.querySelector('[data-field="money"]').value = state.money;
-    root.querySelector('[data-field="currency"]').value = state.currency;
-    root.querySelector("#rpt-character-display").textContent = state.character || "Unnamed character";
-    root.querySelector("#rpt-location-display").textContent = state.location || "Location unrecorded";
-    root.querySelector("#rpt-clock-display").textContent = [state.date, state.time].filter(Boolean).join(" · ") || "Set the scene's date and time";
-    root.querySelector("#rpt-weather-display").textContent = state.weather || "Weather unrecorded";
-    root.querySelector("#rpt-money-display").textContent = `${state.money || 0} ${state.currency || ""}`.trim();
-    renderCollection("stats", "rpt-stats-list");
-    renderCollection("assets", "rpt-assets-list");
-    renderCollection("clothing", "rpt-clothing-list");
+    if (!panel) return;
+    for (const key of ["character", "location", "date", "time", "weather", "money", "currency"]) {
+        const input = panel.querySelector(`[data-field="${key}"]`);
+        if (input) input.value = state[key] ?? "";
+    }
+
+    panel.querySelector("#rpt-character-display").textContent = state.character || "Unnamed character";
+    panel.querySelector("#rpt-location-display").textContent = state.location || "Location unrecorded";
+    panel.querySelector("#rpt-clock-display").textContent = [state.date, state.time].filter(Boolean).join(" · ") || "Set the scene's date and time";
+    panel.querySelector("#rpt-weather-display").textContent = state.weather || "Weather unrecorded";
+    panel.querySelector("#rpt-money-display").textContent = `${state.money || 0} ${state.currency || ""}`.trim();
+
+    for (const collection of ["stats", "assets", "clothing"]) renderCollection(collection);
 }
 
 function addItem(collection) {
-    const initial = collection === "stats" ? { name: "", value: "" } : { name: "", quantity: "1", notes: "" };
-    state[collection].push(initial);
+    state[collection].push(collection === "stats" ? { name: "", value: "" } : { name: "", quantity: "1", notes: "" });
     persist();
     render();
-    const inputs = root.querySelectorAll(`[data-collection="${collection}"]`);
+    const inputs = panel.querySelectorAll(`#rpt-${collection}-list input`);
     inputs[inputs.length - (collection === "stats" ? 2 : 3)]?.focus();
 }
 
-function downloadBackup() {
+function exportBackup() {
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -159,12 +148,14 @@ function importBackup(file) {
     const reader = new FileReader();
     reader.onload = () => {
         try {
-            const parsed = JSON.parse(String(reader.result));
-            if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Invalid backup");
-            state = { ...clone(defaults), ...parsed };
+            const imported = JSON.parse(String(reader.result));
+            if (!imported || typeof imported !== "object" || Array.isArray(imported)) throw new Error("Invalid backup");
+            state = { ...clone(defaults), ...imported };
             for (const key of ["stats", "assets", "clothing"]) {
                 if (!Array.isArray(state[key])) state[key] = clone(defaults[key]);
             }
+            // Keep the current launcher position; a backup should not move the button unexpectedly.
+            state.position = { ...state.position, ...readPosition() };
             persist();
             render();
         } catch {
@@ -174,88 +165,182 @@ function importBackup(file) {
     reader.readAsText(file);
 }
 
-function buildUI() {
-    root = element("section", "rpt-root");
-    root.innerHTML = `
-      <header class="rpt-hero">
-        <div class="rpt-eyebrow">YOUR STORY, AT A GLANCE</div>
-        <h2 id="rpt-character-display"></h2>
-        <div class="rpt-scene-line"><span id="rpt-location-display"></span><span id="rpt-clock-display"></span></div>
-        <div class="rpt-atmosphere"><span class="rpt-weather-mark" aria-hidden="true">☁</span><span id="rpt-weather-display"></span></div>
+function buildPanel() {
+    panel = makeElement("section", "rpg-tracker-panel hidden");
+    panel.id = "rpg-tracker-panel";
+    panel.setAttribute("aria-label", "RPG Tracker");
+    panel.innerHTML = `
+      <header class="rpg-tracker-header">
+        <span>RPG Tracker</span>
+        <button type="button" class="rpg-tracker-close" aria-label="Close tracker">×</button>
       </header>
-      <div class="rpt-money-card"><span class="rpt-label">PURSE</span><strong id="rpt-money-display"></strong></div>
-      <section class="rpt-section">
-        <h3>Character &amp; scene</h3>
-        <div class="rpt-grid">
-          <label class="rpt-field"><span class="rpt-label">Character</span><input data-field="character" type="text" placeholder="Character name"></label>
-          <label class="rpt-field"><span class="rpt-label">Location</span><input data-field="location" type="text" placeholder="Where are they?"></label>
-          <label class="rpt-field"><span class="rpt-label">Date</span><input data-field="date" type="text" placeholder="e.g. 14th of Frostfall"></label>
-          <label class="rpt-field"><span class="rpt-label">Time</span><input data-field="time" type="text" placeholder="e.g. just after dawn"></label>
-          <label class="rpt-field"><span class="rpt-label">Weather</span><input data-field="weather" type="text" placeholder="e.g. cold rain, low fog"></label>
-          <label class="rpt-field"><span class="rpt-label">Money</span><input data-field="money" type="number" step="any" placeholder="0"></label>
-          <label class="rpt-field"><span class="rpt-label">Currency</span><input data-field="currency" type="text" placeholder="gold"></label>
-        </div>
-      </section>
-      <section class="rpt-section">
-        <div class="rpt-heading-row"><h3>Stats</h3><button type="button" class="rpt-add" data-add="stats">＋ Add stat</button></div>
-        <div class="rpt-list rpt-stat-list" id="rpt-stats-list"></div>
-      </section>
-      <section class="rpt-section">
-        <div class="rpt-heading-row"><h3>Assets &amp; inventory</h3><button type="button" class="rpt-add" data-add="assets">＋ Add item</button></div>
-        <div class="rpt-list" id="rpt-assets-list"></div>
-      </section>
-      <section class="rpt-section">
-        <div class="rpt-heading-row"><h3>Clothing</h3><button type="button" class="rpt-add" data-add="clothing">＋ Add clothing</button></div>
-        <div class="rpt-list" id="rpt-clothing-list"></div>
-      </section>
-      <footer class="rpt-footer"><span>Changes save automatically in SillyTavern.</span>
-        <div class="rpt-actions"><button type="button" class="rpt-quiet" data-action="export">Export</button>
-          <button type="button" class="rpt-quiet" data-action="import">Import</button>
-          <input type="file" accept="application/json,.json" data-import-file hidden>
-        </div>
-      </footer>`;
+      <div class="rpg-tracker-body">
+        <header class="rpt-hero">
+          <div class="rpt-eyebrow">YOUR STORY, AT A GLANCE</div>
+          <h2 id="rpt-character-display"></h2>
+          <div class="rpt-scene-line"><span id="rpt-location-display"></span><span id="rpt-clock-display"></span></div>
+          <div class="rpt-atmosphere"><span class="rpt-weather-mark" aria-hidden="true">☁</span><span id="rpt-weather-display"></span></div>
+        </header>
+        <div class="rpt-money-card"><span class="rpt-label">PURSE</span><strong id="rpt-money-display"></strong></div>
+        <section class="rpt-section">
+          <h3>Character &amp; scene</h3>
+          <div class="rpt-grid">
+            <label class="rpt-field"><span class="rpt-label">Character</span><input data-field="character" type="text" placeholder="Character name"></label>
+            <label class="rpt-field"><span class="rpt-label">Location</span><input data-field="location" type="text" placeholder="Where are they?"></label>
+            <label class="rpt-field"><span class="rpt-label">Date</span><input data-field="date" type="text" placeholder="e.g. 14th of Frostfall"></label>
+            <label class="rpt-field"><span class="rpt-label">Time</span><input data-field="time" type="text" placeholder="e.g. just after dawn"></label>
+            <label class="rpt-field"><span class="rpt-label">Weather</span><input data-field="weather" type="text" placeholder="e.g. cold rain, low fog"></label>
+            <label class="rpt-field"><span class="rpt-label">Money</span><input data-field="money" type="number" step="any" placeholder="0"></label>
+            <label class="rpt-field"><span class="rpt-label">Currency</span><input data-field="currency" type="text" placeholder="gold"></label>
+          </div>
+        </section>
+        <section class="rpt-section">
+          <div class="rpt-heading-row"><h3>Stats</h3><button type="button" class="rpt-add" data-add="stats">＋ Add stat</button></div>
+          <div class="rpt-list rpt-stat-list" id="rpt-stats-list"></div>
+        </section>
+        <section class="rpt-section">
+          <div class="rpt-heading-row"><h3>Assets &amp; inventory</h3><button type="button" class="rpt-add" data-add="assets">＋ Add item</button></div>
+          <div class="rpt-list" id="rpt-assets-list"></div>
+        </section>
+        <section class="rpt-section">
+          <div class="rpt-heading-row"><h3>Clothing</h3><button type="button" class="rpt-add" data-add="clothing">＋ Add clothing</button></div>
+          <div class="rpt-list" id="rpt-clothing-list"></div>
+        </section>
+        <footer class="rpt-footer">
+          <span>Changes save automatically in SillyTavern.</span>
+          <div class="rpt-actions">
+            <button type="button" class="rpt-quiet" data-action="export">Export</button>
+            <button type="button" class="rpt-quiet" data-action="import">Import</button>
+            <input type="file" accept="application/json,.json" data-import-file hidden>
+          </div>
+        </footer>
+      </div>`;
 
-    root.addEventListener("input", (event) => {
+    panel.addEventListener("input", (event) => {
         const target = event.target;
+        if (!(target instanceof HTMLInputElement)) return;
         if (target.dataset.field) {
             const key = target.dataset.field;
-            state[key] = key === "money" ? (target.value === "" ? "" : Number(target.value)) : target.value;
+            state[key] = key === "money" ? (target.value === "" ? 0 : Number(target.value)) : target.value;
             persist();
-            root.querySelector(`#rpt-${key === "character" ? "character" : key === "location" ? "location" : key === "date" || key === "time" ? "clock" : key === "weather" ? "weather" : key === "money" || key === "currency" ? "money" : ""}-display`)?.replaceChildren();
-            render();
-        } else if (target.dataset.collection) {
+            panel.querySelector("#rpt-character-display").textContent = state.character || "Unnamed character";
+            panel.querySelector("#rpt-location-display").textContent = state.location || "Location unrecorded";
+            panel.querySelector("#rpt-clock-display").textContent = [state.date, state.time].filter(Boolean).join(" · ") || "Set the scene's date and time";
+            panel.querySelector("#rpt-weather-display").textContent = state.weather || "Weather unrecorded";
+            panel.querySelector("#rpt-money-display").textContent = `${state.money || 0} ${state.currency || ""}`.trim();
+            return;
+        }
+        if (target.dataset.collection) {
             const { collection, index, property } = target.dataset;
-            state[collection][Number(index)][property] = target.value;
-            persist();
-            if (collection === "stats" && property === "name") {
-                const valueInput = target.parentElement.querySelector('[data-property="value"]');
-                valueInput?.setAttribute("aria-label", `${target.value || "Stat"} value`);
+            if (state[collection]?.[Number(index)]) {
+                state[collection][Number(index)][property] = target.value;
+                persist();
             }
         }
     });
 
-    root.addEventListener("click", (event) => {
+    panel.addEventListener("click", (event) => {
         const button = event.target.closest("button");
         if (!button) return;
+        if (button.classList.contains("rpg-tracker-close")) panel.classList.add("hidden");
         if (button.dataset.add) addItem(button.dataset.add);
         if (button.dataset.remove) {
             state[button.dataset.remove].splice(Number(button.dataset.index), 1);
             persist();
             render();
         }
-        if (button.dataset.action === "export") downloadBackup();
-        if (button.dataset.action === "import") root.querySelector("[data-import-file]").click();
+        if (button.dataset.action === "export") exportBackup();
+        if (button.dataset.action === "import") panel.querySelector("[data-import-file]").click();
     });
 
-    root.addEventListener("change", (event) => {
-        if (event.target.matches("[data-import-file]") && event.target.files?.[0]) importBackup(event.target.files[0]);
+    panel.addEventListener("change", (event) => {
+        const input = event.target;
+        if (input.matches("[data-import-file]") && input.files?.[0]) importBackup(input.files[0]);
     });
+
+    document.body.append(panel);
     render();
-    return root;
 }
 
-jQuery(() => {
+function clampPosition(x, y) {
+    const width = launcher?.offsetWidth || 64;
+    const height = launcher?.offsetHeight || 64;
+    return {
+        x: Math.max(8, Math.min(x, window.innerWidth - width - 8)),
+        y: Math.max(8, Math.min(y, window.innerHeight - height - 8)),
+    };
+}
+
+function savePosition() {
+    const rect = launcher.getBoundingClientRect();
+    state.position = clampPosition(rect.left, rect.top);
+    launcher.style.left = `${state.position.x}px`;
+    launcher.style.top = `${state.position.y}px`;
+    persist();
+}
+
+function buildLauncher() {
+    launcher = makeElement("button", "rpg-tracker-fab", "RPG");
+    launcher.type = "button";
+    launcher.id = "rpg-tracker-toggle";
+    launcher.title = "Open RPG Tracker; drag to move";
+    launcher.setAttribute("aria-label", "Open RPG Tracker; drag to move");
+
+    state.position = clampPosition(state.position.x, state.position.y);
+    launcher.style.left = `${state.position.x}px`;
+    launcher.style.top = `${state.position.y}px`;
+
+    let pointerStart = null;
+    let moved = false;
+
+    launcher.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        const rect = launcher.getBoundingClientRect();
+        pointerStart = { x: event.clientX, y: event.clientY, left: rect.left, top: rect.top };
+        moved = false;
+        launcher.setPointerCapture(event.pointerId);
+    });
+
+    launcher.addEventListener("pointermove", (event) => {
+        if (!pointerStart) return;
+        const dx = event.clientX - pointerStart.x;
+        const dy = event.clientY - pointerStart.y;
+        if (Math.abs(dx) + Math.abs(dy) > 4) moved = true;
+        if (!moved) return;
+        const position = clampPosition(pointerStart.left + dx, pointerStart.top + dy);
+        launcher.style.left = `${position.x}px`;
+        launcher.style.top = `${position.y}px`;
+    });
+
+    launcher.addEventListener("pointerup", () => {
+        if (moved) savePosition();
+        pointerStart = null;
+    });
+    launcher.addEventListener("pointercancel", () => {
+        pointerStart = null;
+    });
+    launcher.addEventListener("click", (event) => {
+        if (moved) {
+            event.preventDefault();
+            event.stopPropagation();
+            moved = false;
+            return;
+        }
+        panel.classList.toggle("hidden");
+    });
+
+    document.body.append(launcher);
+}
+
+function init() {
+    if (document.getElementById("rpg-tracker-panel")) return;
     loadState();
-    const host = document.getElementById("extensions_settings");
-    if (host) host.append(buildUI());
-});
+    buildPanel();
+    buildLauncher();
+}
+
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init, { once: true });
+} else {
+    init();
+}
