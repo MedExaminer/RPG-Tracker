@@ -1,50 +1,434 @@
-.rpt-root {
-    --rpt-ink: #e9e2d5;
-    --rpt-muted: #b7ad9e;
-    --rpt-gold: #d6b77a;
-    --rpt-line: rgba(222, 201, 160, .2);
-    color: var(--rpt-ink);
-    max-width: 760px;
-    margin: 12px auto;
-    padding: 18px;
-    border: 1px solid var(--rpt-line);
-    border-radius: 14px;
-    background: radial-gradient(ellipse at 50% 0, rgba(112, 82, 53, .28), transparent 58%), linear-gradient(145deg, rgba(31, 29, 27, .98), rgba(17, 18, 19, .98));
-    box-shadow: 0 12px 35px rgba(0, 0, 0, .28), inset 0 1px rgba(255, 255, 255, .035);
-    font-family: Georgia, "Times New Roman", serif;
+const extensionName = "rpg-tracker";
+const SETTINGS_KEY = `${extensionName}-state`;
+const POSITION_KEY = `${extensionName}-position`;
+const DEFAULT_STATE = {
+    character: "Adventurer",
+    location: "Unknown location",
+    date: "",
+    time: "",
+    weather: "",
+    money: 0,
+    currency: "gold",
+    stats: [
+        { name: "Health", value: "100 / 100" },
+        { name: "Energy", value: "100 / 100" },
+        { name: "Level", value: "1" },
+    ],
+    assets: [],
+    clothing: [],
+};
+
+let state = loadState();
+
+function clone(value) {
+    return JSON.parse(JSON.stringify(value));
 }
-.rpt-root * { box-sizing: border-box; }
-.rpt-hero { padding: 18px 18px 16px; text-align: center; border: 1px solid var(--rpt-line); border-radius: 10px; background: linear-gradient(110deg, rgba(255,255,255,.025), rgba(214,183,122,.07), rgba(255,255,255,.02)); }
-.rpt-eyebrow, .rpt-label { color: var(--rpt-gold); font: 600 10px/1.4 system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; }
-.rpt-hero h2 { margin: 8px 0; color: #f0dfbd; font: 500 28px/1.2 Georgia, serif; }
-.rpt-scene-line { display: flex; justify-content: center; flex-wrap: wrap; gap: 5px 16px; color: var(--rpt-muted); font: 13px/1.5 system-ui, sans-serif; }
-.rpt-atmosphere { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 12px; color: #d4cbb9; font: italic 14px/1.4 Georgia, serif; }
-.rpt-weather-mark { color: var(--rpt-gold); font-size: 19px; }
-.rpt-money-card { display: flex; align-items: baseline; justify-content: space-between; margin: 12px 0; padding: 12px 15px; border-left: 3px solid var(--rpt-gold); background: rgba(214,183,122,.07); }
-.rpt-money-card strong { color: #f1dfb8; font: 600 18px/1.2 system-ui, sans-serif; }
-.rpt-section { margin-top: 15px; padding: 14px; border: 1px solid var(--rpt-line); border-radius: 10px; background: rgba(0,0,0,.12); }
-.rpt-section h3 { margin: 0; color: #e6d3ad; font: 500 17px/1.3 Georgia, serif; }
-.rpt-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 12px; }
-.rpt-field { display: flex; flex-direction: column; gap: 5px; }
-.rpt-field input, .rpt-item input { width: 100%; min-width: 0; padding: 8px 9px; border: 1px solid rgba(222,201,160,.2); border-radius: 6px; outline: none; background: rgba(9,10,11,.6); color: var(--rpt-ink); font: 13px/1.35 system-ui, sans-serif; }
-.rpt-field input:focus, .rpt-item input:focus { border-color: var(--rpt-gold); box-shadow: 0 0 0 2px rgba(214,183,122,.12); }
-.rpt-field input::placeholder, .rpt-item input::placeholder { color: #827c72; }
-.rpt-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.rpt-add, .rpt-quiet, .rpt-remove { border: 1px solid var(--rpt-line); border-radius: 6px; background: rgba(214,183,122,.07); color: #e6d3ad; cursor: pointer; }
-.rpt-add, .rpt-quiet { padding: 6px 9px; font: 12px system-ui, sans-serif; }
-.rpt-add:hover, .rpt-quiet:hover { background: rgba(214,183,122,.16); }
-.rpt-list { display: grid; gap: 7px; margin-top: 11px; }
-.rpt-item { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(60px, .35fr) minmax(120px, 1.2fr) 30px; gap: 7px; }
-.rpt-stat-list .rpt-item { grid-template-columns: minmax(100px, 1fr) minmax(80px, .8fr) 30px; }
-.rpt-remove { color: #d2a39a; font-size: 18px; line-height: 1; }
-.rpt-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; color: var(--rpt-muted); font: 11px/1.4 system-ui, sans-serif; }
-.rpt-actions { display: flex; gap: 6px; }
-@media (max-width: 520px) {
-    .rpt-root { padding: 10px; }
-    .rpt-section { padding: 10px; }
-    .rpt-item { grid-template-columns: minmax(75px, 1fr) minmax(55px, .45fr) 30px; }
-    .rpt-item input[data-property="notes"] { grid-column: 1 / 3; grid-row: 2; }
-    .rpt-item .rpt-remove { grid-column: 3; grid-row: 1 / 3; }
-    .rpt-stat-list .rpt-item { grid-template-columns: minmax(75px, 1fr) minmax(70px, .8fr) 30px; }
-    .rpt-footer { align-items: flex-start; flex-direction: column; }
+
+function loadState() {
+    try {
+        const raw = localStorage.getItem(SETTINGS_KEY);
+        if (!raw) return clone(DEFAULT_STATE);
+        const parsed = JSON.parse(raw);
+        return { ...clone(DEFAULT_STATE), ...parsed };
+    } catch {
+        return clone(DEFAULT_STATE);
+    }
+}
+
+function saveState() {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(state));
+}
+
+function readPosition() {
+    try {
+        const raw = localStorage.getItem(POSITION_KEY);
+        return raw ? JSON.parse(raw) : { x: 24, y: 120 };
+    } catch {
+        return { x: 24, y: 120 };
+    }
+}
+
+function writePosition(x, y) {
+    localStorage.setItem(POSITION_KEY, JSON.stringify({ x, y }));
+}
+
+function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+}
+
+function addItem(collection) {
+    if (collection === "stats") {
+        state.stats.push({ name: "", value: "" });
+    } else {
+        state[collection].push({ name: "", quantity: "1", notes: "" });
+    }
+    saveState();
+    render();
+    const list = document.querySelector(`#rpt-${collection}-list`);
+    const inputs = list.querySelectorAll('input');
+    inputs[inputs.length - 1]?.focus();
+}
+
+function makeRow(collection, item, index) {
+    const row = el("div", "rpt-item");
+
+    const name = document.createElement("input");
+    name.type = "text";
+    name.value = item.name ?? "";
+    name.placeholder = collection === "stats" ? "Stat name" : "Item name";
+    name.dataset.collection = collection;
+    name.dataset.index = index;
+    name.dataset.property = "name";
+
+    row.appendChild(name);
+
+    if (collection === "stats") {
+        const value = document.createElement("input");
+        value.type = "text";
+        value.value = item.value ?? "";
+        value.placeholder = "Value";
+        value.dataset.collection = collection;
+        value.dataset.index = index;
+        value.dataset.property = "value";
+        row.appendChild(value);
+    } else {
+        const quantity = document.createElement("input");
+        quantity.type = "text";
+        quantity.value = item.quantity ?? "1";
+        quantity.placeholder = "Qty";
+        quantity.dataset.collection = collection;
+        quantity.dataset.index = index;
+        quantity.dataset.property = "quantity";
+        row.appendChild(quantity);
+
+        const notes = document.createElement("input");
+        notes.type = "text";
+        notes.value = item.notes ?? "";
+        notes.placeholder = collection === "assets" ? "Notes / condition" : "How it's worn";
+        notes.dataset.collection = collection;
+        notes.dataset.index = index;
+        notes.dataset.property = "notes";
+        row.appendChild(notes);
+    }
+
+    const remove = el("button", "rpt-remove", "×");
+    remove.type = "button";
+    remove.dataset.collection = collection;
+    remove.dataset.index = index;
+    remove.title = "Remove";
+    row.appendChild(remove);
+    return row;
+}
+
+function renderCollection(collection) {
+    const container = document.querySelector(`#rpt-${collection}-list`);
+    if (!container) return;
+    container.innerHTML = "";
+    state[collection].forEach((item, index) => {
+        container.appendChild(makeRow(collection, item, index));
+    });
+}
+
+function syncSummary() {
+    const character = document.querySelector("#rpt-character-display");
+    const location = document.querySelector("#rpt-location-display");
+    const clock = document.querySelector("#rpt-clock-display");
+    const weather = document.querySelector("#rpt-weather-display");
+    const money = document.querySelector("#rpt-money-display");
+
+    if (character) character.textContent = state.character || "Unnamed character";
+    if (location) location.textContent = state.location || "Location unrecorded";
+    if (clock) clock.textContent = [state.date, state.time].filter(Boolean).join(" · ") || "Set the scene";
+    if (weather) weather.textContent = state.weather || "Weather unrecorded";
+    if (money) money.textContent = `${state.money || 0} ${state.currency || ""}`.trim();
+}
+
+function render() {
+    const panel = document.getElementById("rpg-tracker-panel");
+    if (!panel) return;
+
+    const characterInput = panel.querySelector('[data-field="character"]');
+    const locationInput = panel.querySelector('[data-field="location"]');
+    const dateInput = panel.querySelector('[data-field="date"]');
+    const timeInput = panel.querySelector('[data-field="time"]');
+    const weatherInput = panel.querySelector('[data-field="weather"]');
+    const moneyInput = panel.querySelector('[data-field="money"]');
+    const currencyInput = panel.querySelector('[data-field="currency"]');
+
+    if (characterInput) characterInput.value = state.character;
+    if (locationInput) locationInput.value = state.location;
+    if (dateInput) dateInput.value = state.date;
+    if (timeInput) timeInput.value = state.time;
+    if (weatherInput) weatherInput.value = state.weather;
+    if (moneyInput) moneyInput.value = state.money;
+    if (currencyInput) currencyInput.value = state.currency;
+
+    syncSummary();
+    renderCollection("stats");
+    renderCollection("assets");
+    renderCollection("clothing");
+}
+
+function persistFromInputs() {
+    const panel = document.getElementById("rpg-tracker-panel");
+    if (!panel) return;
+
+    const fields = panel.querySelectorAll("[data-field]");
+    fields.forEach((input) => {
+        const key = input.dataset.field;
+        if (key === "money") {
+            state[key] = input.value === "" ? 0 : Number(input.value);
+        } else {
+            state[key] = input.value;
+        }
+    });
+
+    saveState();
+    render();
+}
+
+function handleListInput(event) {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) return;
+    const { collection, index, property } = target.dataset;
+    if (!collection || index === undefined || !property) return;
+
+    const itemIndex = Number(index);
+    if (!Array.isArray(state[collection])) return;
+    if (!state[collection][itemIndex]) return;
+    state[collection][itemIndex][property] = target.value;
+    saveState();
+}
+
+function handleListClick(event) {
+    const button = event.target.closest("button[data-collection]");
+    if (!button) return;
+    const collection = button.dataset.collection;
+    const index = Number(button.dataset.index);
+    state[collection].splice(index, 1);
+    saveState();
+    render();
+}
+
+function buildPanel() {
+    const panel = document.createElement("div");
+    panel.id = "rpg-tracker-panel";
+    panel.className = "rpg-tracker-panel hidden";
+
+    panel.innerHTML = `
+      <div class="rpg-tracker-header">
+        <span>RPG Tracker</span>
+        <button type="button" class="rpg-tracker-close" aria-label="Close tracker">×</button>
+      </div>
+      <div class="rpg-tracker-body">
+        <header class="rpt-hero">
+          <div class="rpt-eyebrow">YOUR STORY, AT A GLANCE</div>
+          <h2 id="rpt-character-display">${state.character || "Unnamed character"}</h2>
+          <div class="rpt-scene-line">
+            <span id="rpt-location-display">${state.location || "Location unrecorded"}</span>
+            <span id="rpt-clock-display">${[state.date, state.time].filter(Boolean).join(" · ") || "Set the scene"}</span>
+          </div>
+          <div class="rpt-atmosphere"><span class="rpt-weather-mark">☁</span><span id="rpt-weather-display">${state.weather || "Weather unrecorded"}</span></div>
+        </header>
+        <div class="rpt-money-card"><span class="rpt-label">PURSE</span><strong id="rpt-money-display">${state.money || 0} ${state.currency || ""}</strong></div>
+
+        <section class="rpt-section">
+          <h3>Character &amp; scene</h3>
+          <div class="rpt-grid">
+            <label class="rpt-field"><span class="rpt-label">Character</span><input data-field="character" type="text" value="${state.character}" placeholder="Character name"></label>
+            <label class="rpt-field"><span class="rpt-label">Location</span><input data-field="location" type="text" value="${state.location}" placeholder="Where are they?"></label>
+            <label class="rpt-field"><span class="rpt-label">Date</span><input data-field="date" type="text" value="${state.date}" placeholder="e.g. 14th of Frostfall"></label>
+            <label class="rpt-field"><span class="rpt-label">Time</span><input data-field="time" type="text" value="${state.time}" placeholder="e.g. dawn"></label>
+            <label class="rpt-field"><span class="rpt-label">Weather</span><input data-field="weather" type="text" value="${state.weather}" placeholder="e.g. cold rain"></label>
+            <label class="rpt-field"><span class="rpt-label">Money</span><input data-field="money" type="number" step="any" value="${state.money}" placeholder="0"></label>
+            <label class="rpt-field"><span class="rpt-label">Currency</span><input data-field="currency" type="text" value="${state.currency}" placeholder="gold"></label>
+          </div>
+        </section>
+
+        <section class="rpt-section">
+          <div class="rpt-heading-row">
+            <h3>Stats</h3>
+            <button type="button" class="rpt-add" data-add="stats">＋ Add stat</button>
+          </div>
+          <div class="rpt-list" id="rpt-stats-list"></div>
+        </section>
+
+        <section class="rpt-section">
+          <div class="rpt-heading-row">
+            <h3>Assets &amp; inventory</h3>
+            <button type="button" class="rpt-add" data-add="assets">＋ Add item</button>
+          </div>
+          <div class="rpt-list" id="rpt-assets-list"></div>
+        </section>
+
+        <section class="rpt-section">
+          <div class="rpt-heading-row">
+            <h3>Clothing</h3>
+            <button type="button" class="rpt-add" data-add="clothing">＋ Add clothing</button>
+          </div>
+          <div class="rpt-list" id="rpt-clothing-list"></div>
+        </section>
+
+        <footer class="rpt-footer">
+          <span>Changes save automatically</span>
+          <div class="rpt-actions">
+            <button type="button" class="rpt-quiet" data-export="true">Export</button>
+            <button type="button" class="rpt-quiet" data-import="true">Import</button>
+            <input type="file" accept="application/json,.json" id="rpt-import-file" hidden>
+          </div>
+        </footer>
+      </div>
+    `;
+
+    panel.querySelector(".rpg-tracker-close").addEventListener("click", () => panel.classList.add("hidden"));
+
+    panel.addEventListener("input", (event) => {
+        const target = event.target;
+        if (target instanceof HTMLInputElement && target.dataset.field) {
+            if (target.dataset.field === "money") {
+                state[target.dataset.field] = target.value === "" ? 0 : Number(target.value);
+            } else {
+                state[target.dataset.field] = target.value;
+            }
+            saveState();
+            syncSummary();
+        }
+    });
+
+    panel.addEventListener("click", (event) => {
+        const addButton = event.target.closest("[data-add]");
+        if (addButton) {
+            addItem(addButton.dataset.add);
+            return;
+        }
+
+        const exportButton = event.target.closest("[data-export]");
+        if (exportButton) {
+            const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "rpg-tracker-backup.json";
+            a.click();
+            URL.revokeObjectURL(url);
+            return;
+        }
+
+        const importButton = event.target.closest("[data-import]");
+        if (importButton) {
+            const fileInput = panel.querySelector("#rpt-import-file");
+            fileInput.click();
+            return;
+        }
+
+        const removeButton = event.target.closest("button[data-collection]");
+        if (removeButton) {
+            const collection = removeButton.dataset.collection;
+            const index = Number(removeButton.dataset.index);
+            state[collection].splice(index, 1);
+            saveState();
+            render();
+            return;
+        }
+    });
+
+    panel.addEventListener("change", (event) => {
+        const fileInput = event.target.closest("#rpt-import-file");
+        if (!fileInput || !fileInput.files?.[0]) return;
+
+        const file = fileInput.files[0];
+        const reader = new FileReader();
+        reader.onload = () => {
+            try {
+                const parsed = JSON.parse(String(reader.result));
+                state = { ...clone(DEFAULT_STATE), ...parsed };
+                if (!Array.isArray(state.stats)) state.stats = clone(DEFAULT_STATE.stats);
+                if (!Array.isArray(state.assets)) state.assets = clone(DEFAULT_STATE.assets);
+                if (!Array.isArray(state.clothing)) state.clothing = clone(DEFAULT_STATE.clothing);
+                saveState();
+                render();
+            } catch {
+                window.alert("Invalid RPG Tracker backup file.");
+            }
+        };
+        reader.readAsText(file);
+    });
+
+    panel.addEventListener("input", handleListInput);
+    panel.addEventListener("click", handleListClick);
+
+    document.body.appendChild(panel);
+    render();
+    return panel;
+}
+
+function createToggleButton(panel) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "rpg-tracker-fab";
+    button.textContent = "RPG";
+    button.title = "Toggle RPG Tracker";
+
+    const pos = readPosition();
+    button.style.left = `${pos.x}px`;
+    button.style.top = `${pos.y}px`;
+
+    let dragging = false;
+    let startX = 0;
+    let startY = 0;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    button.addEventListener("pointerdown", (event) => {
+        dragging = true;
+        startX = event.clientX;
+        startY = event.clientY;
+        const rect = button.getBoundingClientRect();
+        offsetX = rect.left;
+        offsetY = rect.top;
+        button.setPointerCapture(event.pointerId);
+    });
+
+    button.addEventListener("pointermove", (event) => {
+        if (!dragging) return;
+        const dx = event.clientX - startX;
+        const dy = event.clientY - startY;
+        const x = Math.max(8, offsetX + dx);
+        const y = Math.max(8, offsetY + dy);
+        button.style.left = `${x}px`;
+        button.style.top = `${y}px`;
+        writePosition(x, y);
+    });
+
+    button.addEventListener("pointerup", () => {
+        dragging = false;
+    });
+
+    button.addEventListener("pointerleave", () => {
+        dragging = false;
+    });
+
+    button.addEventListener("click", (event) => {
+        if (dragging) return;
+        panel.classList.toggle("hidden");
+        event.preventDefault();
+    });
+
+    document.body.appendChild(button);
+    return button;
+}
+
+function initTracker() {
+    if (document.getElementById("rpg-tracker-panel") || document.getElementById("rpg-tracker-toggle")) return;
+    const panel = buildPanel();
+    createToggleButton(panel);
+}
+
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initTracker, { once: true });
+} else {
+    initTracker();
 }
