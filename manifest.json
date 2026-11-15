@@ -3,7 +3,9 @@
   "name": "rpg-tracker",
   "version": "1.0.0",
   "author": "MedExaminer",
-  "description": "An editable, immersive roleplay dashboard for character stats, inventory, clothing, money, and world time and weather.",
+  "description": "A draggable RPG tracker panel for SillyTavern.",
+  "js": "index.js",
+  "css": "style.css",
   "loading_order": 10,
   "requires": []
 }
